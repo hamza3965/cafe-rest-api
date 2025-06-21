@@ -9,17 +9,22 @@ import os
 
 load_dotenv()
 
-API_KEY = os.getenv("SECRET_API_KEY") # Any random string
+API_KEY = os.getenv("SECRET_API_KEY")  # Any random string
 
 app = Flask(__name__)
+
 
 # CREATE DB
 class Base(DeclarativeBase):
     pass
+
+
 # Connect to Database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+
 
 def str_to_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "yes", "y", "true", "t"}
@@ -40,7 +45,9 @@ class Cafe(db.Model):
     coffee_price: Mapped[str] = mapped_column(String(250), nullable=True)
 
     def to_dict(self):
-        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+        return {
+            column.name: getattr(self, column.name) for column in self.__table__.columns
+        }
 
 
 with app.app_context():
@@ -60,22 +67,29 @@ def get_random_cafe():
     random_cafe = random.choice(all_cafes)
     return jsonify(cafe=random_cafe.to_dict())
 
+
 @app.route("/all")
 def get_all_cafes():
     result = db.session.execute(db.select(Cafe))
     all_cafes = result.scalars().all()
     return jsonify(cafes=[cafe.to_dict() for cafe in all_cafes])
 
+
 @app.route("/search")
 def find_cafe():
     query_location = request.args.get("loc")
-    result = db.session.execute(db.select(Cafe).where(Cafe.location.ilike(f"%{query_location}%")))
+    result = db.session.execute(
+        db.select(Cafe).where(Cafe.location.ilike(f"%{query_location}%"))
+    )
     all_cafes = result.scalars().all()
     if all_cafes:
         return jsonify(cafes=[cafe.to_dict() for cafe in all_cafes])
     else:
-        return jsonify(error={"Not Found": "Sorry, we don't have a cafe at that location."}), 404
-    
+        return jsonify(
+            error={"Not Found": "Sorry, we don't have a cafe at that location."}
+        ), 404
+
+
 # HTTP POST - Create Record
 @app.route("/add", methods=["POST"])
 def post_new_cafe():
@@ -112,6 +126,7 @@ def post_new_cafe():
     else:
         return jsonify(response={"success": "Successfully added the new cafe."}), 201
 
+
 # HTTP PUT/PATCH - Update Record
 @app.route("/update-price/<int:cafe_id>", methods=["PATCH"])
 def update_price(cafe_id):
@@ -122,7 +137,12 @@ def update_price(cafe_id):
         db.session.commit()
         return jsonify(success="Successfully updated the price."), 200
     else:
-        return jsonify(error={"Not Found": "Sorry a cafe with that id was not found in the database"}), 404
+        return jsonify(
+            error={
+                "Not Found": "Sorry a cafe with that id was not found in the database"
+            }
+        ), 404
+
 
 # HTTP DELETE - Delete Record
 @app.route("/report-closed/<int:cafe_id>", methods=["DELETE"])
@@ -133,11 +153,22 @@ def delete_cafe(cafe_id):
         if cafe:
             db.session.delete(cafe)
             db.session.commit()
-            return jsonify(response={"success": "Successfully deleted the cafe from the database."}), 200
+            return jsonify(
+                response={"success": "Successfully deleted the cafe from the database."}
+            ), 200
         else:
-            return jsonify(error={"Not Found": "Sorry a cafe with that id was not found in the database."}), 404
+            return jsonify(
+                error={
+                    "Not Found": "Sorry a cafe with that id was not found in the database."
+                }
+            ), 404
     else:
-        return jsonify(error={"Forbidden": "Sorry, that's not allowed. Make sure you have the correct api_key."}), 403
+        return jsonify(
+            error={
+                "Forbidden": "Sorry, that's not allowed. Make sure you have the correct api_key."
+            }
+        ), 403
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app.run(debug=True)
