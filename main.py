@@ -9,7 +9,7 @@ import os
 
 load_dotenv()
 
-API_KEY = os.getenv("API_KEY") # Any random string
+API_KEY = os.getenv("SECRET_API_KEY") # Any random string
 
 app = Flask(__name__)
 
@@ -17,19 +17,12 @@ app = Flask(__name__)
 class Base(DeclarativeBase):
     pass
 # Connect to Database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cafes.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
-def str_to_bool(string):
-    """
-    It receives a string, check if the string is a valid positive answer and return the result.
-    :param string: the text.
-    :return: bool
-    """
-    if string in ["1", "YES", "Yes", "yes", "Y", "y", "TRUE", "True", "true", "T", "t"]:
-        return True
-    return False
+def str_to_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "yes", "y", "true", "t"}
 
 
 # Cafe TABLE Configuration
@@ -66,24 +59,6 @@ def get_random_cafe():
     all_cafes = result.scalars().all()
     random_cafe = random.choice(all_cafes)
     return jsonify(cafe=random_cafe.to_dict())
-    # return jsonify(cafe={
-    #     #Omit the id from the response
-    #     # "id": random_cafe.id,
-    #     "name": random_cafe.name,
-    #     "map_url": random_cafe.map_url,
-    #     "img_url": random_cafe.img_url,
-    #     "location": random_cafe.location,
-    #
-    #     #Put some properties in a sub-category
-    #     "amenities": {
-    #       "seats": random_cafe.seats,
-    #       "has_toilet": random_cafe.has_toilet,
-    #       "has_wifi": random_cafe.has_wifi,
-    #       "has_sockets": random_cafe.has_sockets,
-    #       "can_take_calls": random_cafe.can_take_calls,
-    #       "coffee_price": random_cafe.coffee_price,
-    #     }
-    # })
 
 @app.route("/all")
 def get_all_cafes():
@@ -100,28 +75,41 @@ def find_cafe():
         return jsonify(cafes=[cafe.to_dict() for cafe in all_cafes])
     else:
         return jsonify(error={"Not Found": "Sorry, we don't have a cafe at that location."}), 404
-
+    
 # HTTP POST - Create Record
 @app.route("/add", methods=["POST"])
 def post_new_cafe():
+    new_cafe = Cafe(
+        name=request.form.get("name"),
+        map_url=request.form.get("map_url"),
+        img_url=request.form.get("img_url"),
+        location=request.form.get("location"),
+        has_sockets=str_to_bool(request.form.get("has_sockets")),
+        has_toilet=str_to_bool(request.form.get("has_toilet")),
+        has_wifi=str_to_bool(request.form.get("has_wifi")),
+        can_take_calls=str_to_bool(request.form.get("can_take_calls")),
+        seats=request.form.get("seats"),
+        coffee_price=request.form.get("coffee_price"),
+    )
+    db.session.add(new_cafe)
     try:
-        new_cafe = Cafe(
-            name=request.form.get("name"),
-            map_url=request.form.get("map_url"),
-            img_url=request.form.get("img_url"),
-            location=request.form.get("loc"),
-            has_sockets=str_to_bool(request.form.get("sockets")),
-            has_toilet=str_to_bool(request.form.get("toilet")),
-            has_wifi=str_to_bool(request.form.get("wifi")),
-            can_take_calls=str_to_bool(request.form.get("calls")),
-            seats=request.form.get("seats"),
-            coffee_price=request.form.get("coffee_price"),
+        print(
+            f"Name = {request.form.get('name')}\n"
+            f"Map URL = {request.form.get('map_url')}\n"
+            f"Image URL = {request.form.get('img_url')}\n"
+            f"Location = {request.form.get('location')}\n"
+            f"Has Sockets = {request.form.get('has_sockets')}\n"
+            f"Has Toilet = {request.form.get('has_toilet')}\n"
+            f"Has Wifi = {request.form.get('has_wifi')}\n"
+            f"Can Take Calls = {request.form.get('can_take_calls')}\n"
+            f"Seats = {request.form.get('seats')}\n"
+            f"Coffee Price = {request.form.get('coffee_price')}\n"
         )
+        db.session.commit()
     except IntegrityError:
+        db.session.rollback()
         return jsonify(response={"error": "A cafe with this name already exists."}), 409
     else:
-        db.session.add(new_cafe)
-        db.session.commit()
         return jsonify(response={"success": "Successfully added the new cafe."}), 201
 
 # HTTP PUT/PATCH - Update Record
@@ -149,7 +137,7 @@ def delete_cafe(cafe_id):
         else:
             return jsonify(error={"Not Found": "Sorry a cafe with that id was not found in the database."}), 404
     else:
-        return jsonify(error="Sorry, that's not allowed. Make sure you have the correct api_key."), 403
+        return jsonify(error={"Forbidden": "Sorry, that's not allowed. Make sure you have the correct api_key."}), 403
 
 if __name__ == '__main__':
     app.run(debug=True)
